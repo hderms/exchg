@@ -11,13 +11,12 @@ libraryDependencies ++= Seq(
     "org.scalacheck"  %% "scalacheck"   % "1.12.5"      % "test,it",
     "com.typesafe.akka" %% "akka-persistence" % "2.4.11",
     "org.iq80.leveldb"            % "leveldb"          % "0.7",
-    "org.fusesource.leveldbjni"   % "leveldbjni-all"   % "1.8"
+    "org.fusesource.leveldbjni"   % "leveldbjni-all"   % "1.8",
+"com.github.nikita-volkov" % "sext" % "0.2.4"
 )
 
 scalacOptions ++= List("-feature","-deprecation", "-unchecked", "-Xlint")
 
 testOptions in Test += Tests.Argument(TestFrameworks.ScalaTest, "-l", "org.scalatest.tags.Slow", "-u","target/junit-xml-reports", "-oD", "-eS")
 
-scalastyleConfig <<= baseDirectory { _ / "src/main/config" / "scalastyle-config.xml" }
 
-coverageEnabled := true
