@@ -3,10 +3,13 @@ import akka.actor._
 import akka.persistence._
 import scala.collection.mutable.PriorityQueue
 
-case class Cmd(data: String)
-case class Evt(data: String)
+abstract trait BaseCmd
+case class Cmd(data: Order) extends BaseCmd
+case class EmptyCmd() extends BaseCmd
+case class ExternalCmd(data: String) extends BaseCmd
+case class Evt(data: Order)
 
-case class State(events: List[String] = Nil) {
+case class State(events: List[Order] = Nil) {
   def updated(evt: Evt): State = copy(evt.data :: events)
   def size: Int = events.length
   override def toString: String = events.reverse.toString
@@ -14,6 +17,7 @@ case class State(events: List[String] = Nil) {
 class ExamplePersistentActor extends PersistentActor {
   override def persistenceId = "exchg-inflow"
 
+  val exchange = new TradeOffice()
   var state = State()
 
   def updateState(event: Evt): Unit =
@@ -29,13 +33,20 @@ class ExamplePersistentActor extends PersistentActor {
 
   val receiveCommand: Receive = {
     case Cmd(data) =>
-      persist(Evt(s"${data}-${numEvents}"))(updateState)
-      persist(Evt(s"${data}-${numEvents + 1}")) { event =>
+      persist(Evt(data)) { event =>
         updateState(event)
         context.system.eventStream.publish(event)
+        exchange.insert(data)
       }
     case "snap" => saveSnapshot(state)
-    case "print" => println(state)
+    case "print" => {
+      println("state is:")
+      println(state)
+      println("buyers:")
+      println(exchange.buyers.orders)
+      println("sellers:")
+      println(exchange.sellers.orders)
+    }
   }
 
 }
@@ -98,7 +109,9 @@ trait OrderHandler[OrderType <: Order] {
         }
 
       } else {
-        orders += candidateOrder
+        if (candidateOrder.quantity > 0) {
+          orders += candidateOrder
+        }
         return (matchedOrders, Some(ord))
       }
 
@@ -148,7 +161,31 @@ class TradeOffice {
           case o: SellOrder =>
             sellers.insert(o)
         }
+        println(s"completed the following orders: $completed")
         CompletedOrder(completed)
+    }
+  }
+}
+object Parser {
+  val buyRe = "buy (\\d{1,5}) (\\d{1,5})".r
+  val sellRe = "sell (\\d{1,5}) (\\d{1,5})".r
+  val printRe = "print".r
+  val quitRe = "quit".r
+  def parse(s: String): BaseCmd = {
+    s match {
+
+      case buyRe(price, quantity) =>
+        Cmd(BuyOrder(price.toInt, quantity.toInt))
+
+      case sellRe(price, quantity) =>
+        Cmd(SellOrder(price.toInt, quantity.toInt))
+      case printRe() =>
+        ExternalCmd("print")
+      case quitRe() =>
+        ExternalCmd("quit")
+      case _ =>
+        println("Failed to parse")
+        EmptyCmd()
     }
   }
 }
@@ -156,21 +193,19 @@ class TradeOffice {
 object Main extends App {
   val system = ActorSystem("foo")
   val myActor = system.actorOf(Props[ExamplePersistentActor])
-  val persistentActor = system.actorOf(Props(classOf[ExamplePersistentActor]))
-  import sext._
-
-  myActor ! Cmd("foo")
-  myActor ! Cmd("bar")
-  myActor ! "print"
-  myActor ! "snap"
-
-  val myOffice = new TradeOffice
-
-  myOffice.insert(BuyOrder(5, 1))
-  myOffice.insert(SellOrder(6, 2))
-  myOffice.insert(SellOrder(7, 1))
-  println(myOffice.insert(BuyOrder(6, 3)))
-  println(myOffice.buyers.orders)
-  println(myOffice.sellers.orders)
-
+  var line: String = ""
+  while (true) {
+    line = readLine()
+    Parser.parse(line) match {
+      case Cmd(o: Order) =>
+        myActor ! Cmd(o)
+      case ExternalCmd(s: String) =>
+        s match {
+          case "print" => myActor ! "print"
+          case "quit" => System.exit(0)
+        }
+      case EmptyCmd() =>
+      //noop
+    }
+  }
 }

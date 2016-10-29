@@ -11,8 +11,7 @@ libraryDependencies ++= Seq(
     "org.scalacheck"  %% "scalacheck"   % "1.12.5"      % "test,it",
     "com.typesafe.akka" %% "akka-persistence" % "2.4.11",
     "org.iq80.leveldb"            % "leveldb"          % "0.7",
-    "org.fusesource.leveldbjni"   % "leveldbjni-all"   % "1.8",
-"com.github.nikita-volkov" % "sext" % "0.2.4"
+    "org.fusesource.leveldbjni"   % "leveldbjni-all"   % "1.8"
 )
 
 scalacOptions ++= List("-feature","-deprecation", "-unchecked", "-Xlint")
